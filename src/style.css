@@ -26,9 +26,24 @@ body {
   align-items: center;
   height: 100%;
   width: 100%;
+  overflow: hidden;
 }
 select {
   background-color: var(--primary);
-  padding: 0 2rem;
   outline: none;
+}
+
+/* Media Query */
+@media screen and (max-width: 1024px) {
+  body {
+    padding: 0;
+  }
+}
+@media screen and (max-height: 875px) {
+  body {
+    overflow-y: scroll;
+  }
+  #app {
+    height: 875px;
+  }
 }
