@@ -154,7 +154,7 @@ const imageUpload2 = ref<HTMLInputElement | null>(null);
 const imageUrl1 = ref<string>(image2);
 const imageUrl2 = ref<string>(image1);
 
-// Store the base64 image strings for further processing
+// Base64 image strings for further processing
 const base64Image1 = ref<string>("");
 const base64Image2 = ref<string>("");
 

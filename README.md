@@ -38,6 +38,7 @@ Icons used in this project are sourced from [IconScout](https://iconscout.com):
 
 Photo credits:
 
+- Pinterest
 - Photo by Jennifer Enujiugha: [Pexels](https://www.pexels.com/photo/woman-wearing-green-rib-turtleneck-sweater-1125328/)
 - Photo by Godisable Jacob: [Pexels](https://www.pexels.com/photo/woman-sitting-on-sofa-bed-wearing-sunglasses-965324/)
 
