@@ -5,12 +5,15 @@
 @tailwind utilities;
 
 :root {
-  --primary: #d9d9d9;
+  --primary: #e8e8e8;
+  --secondary: white;
+  --tertiary: black;
 }
 html {
   font-size: 12px;
 }
 body {
+  background-color: white;
   font-family: "Outfit";
   font-weight: 300;
   height: 100vh;
@@ -18,7 +21,6 @@ body {
   overflow: hidden;
   padding: 0 10vw;
 }
-
 #app {
   display: flex;
   flex-direction: column;
@@ -32,7 +34,25 @@ select {
   background-color: var(--primary);
   outline: none;
 }
-
+.main-btn {
+  transition: all 0.3s ease;
+}
+.main-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
+}
+.tag {
+  transition: all 0.3s ease;
+}
+.tag:hover {
+  transform: scale(1.03);
+}
+.small-btn {
+  transition: all 0.3s ease;
+}
+.small-btn:hover {
+  transform: scale(1.05);
+}
 /* Media Query */
 @media screen and (max-width: 1024px) {
   body {
