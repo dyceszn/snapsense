@@ -41,6 +41,12 @@ select {
   transform: translateY(-2px);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
+.main-btn:active {
+  transform: translateY(0);
+  box-shadow: none;
+  background-color: var(--tertiary);
+  color: var(--secondary);
+}
 .tag {
   transition: all 0.3s ease;
 }

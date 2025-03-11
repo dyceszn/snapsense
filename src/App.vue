@@ -206,7 +206,12 @@ const handleSubmit = async (event: Event) => {
   } else {
     const context = await detectImages(Images);
     const textResults = await generateCaption(
-      `Generate a ${selectedPlatform.value} post caption for my with this vision ai description: ${context}`
+      // `Generate a ${selectedPlatform.value} post caption for my with this vision ai description: ${context || "Generic image"}`
+      `Generate a ${
+        selectedPlatform.value
+      } post caption for my with this vision ai description: ${
+        context || `An engaging post caption for ${selectedPlatform.value}`
+      }`
     );
     caption.value = textResults ?? "No caption generated";
     isAvailable.value = true;

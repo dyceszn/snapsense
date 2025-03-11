@@ -3,8 +3,13 @@ import axios from "axios";
 const API_KEY = import.meta.env.VITE_APP_HUGGING_FACE_API_KEY;
 
 export const generateCaption = async (input: string) => {
+  // const url =
+  //   "https://api-inference.huggingface.co/models/google/flan-t5-large";
+
+  // const url = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn";
+
   const url =
-    "https://api-inference.huggingface.co/models/google/flan-t5-large";
+    "https://api-inference.huggingface.co/models/tiiuae/falcon-7b-instruct";
 
   try {
     const response = await axios.post(
