@@ -75,33 +75,20 @@
       <div
         class="w-full h-[20%] flex flex-col justify-between md:h-[12.5%] md:flex-row"
       >
-        <select
-          name="platform"
-          id=""
-          v-model="selectedPlatform"
-          class="bg-[var(--secondary)] w-full h-[45%] px-4 rounded-3xl appearance-none cursor-pointer md:w-[53%] md:h-full md:px-8"
+        <div
+          class="bg-[var(--secondary)] w-full h-[45%] px-4 rounded-3xl flex items-center md:w-[53%] md:h-full md:px-8"
         >
-          <option value="" disabled selected>What's the vibe?</option>
-          <option value="Gen-z Instagram">
-            Insta - Captions that'll make your insta pop.
-          </option>
-          <option value="Twitter">
-            X (Twitter) - Tweet-worthy captions that catch fire.
-          </option>
-          <option value="Friendly Facebook">
-            Facebook - Friendly captions that spark engagements.
-          </option>
-          <option value="Professional Linkedin">
-            LinkedIn - Professional captions that connect.
-          </option>
-          <option value="OCR">Optical Character Recognition</option>
-        </select>
+          <p class="truncate">
+            {{ statusText }}
+          </p>
+        </div>
 
         <button
+          :disabled="isSubmitting"
           class="main-btn bg-[var(--secondary)] rounded-3xl w-full h-[45%] md:w-[45%] md:h-full"
           type="submit"
         >
-          Let's get you a caption
+          {{ isSubmitting ? "Analyzing..." : "Analyze image origin" }}
         </button>
       </div>
     </form>
@@ -117,15 +104,15 @@
     <div
       class="w-[75%] md:w-[85%] flex flex-col justify-center items-center text-center"
     >
-      <p class="overflow-y-scroll">
-        {{ caption }}
+      <p class="overflow-y-scroll whitespace-pre-wrap text-left w-full">
+        {{ resultText }}
       </p>
     </div>
     <div
       class="w-[10%] flex flex-col items-center md:items-end md:flex-row md:w-[12%] justify-between"
     >
-      <button class="small-btn size-8">
-        <img :src="copy" alt="" @click="copyToClipboard(caption)" />
+      <button class="small-btn size-8" type="button">
+        <img :src="copy" alt="" @click="copyToClipboard(resultText)" />
       </button>
       <button class="small-btn size-8"><img :src="like" alt="" /></button>
       <button class="small-btn size-8"><img :src="dislike" alt="" /></button>
@@ -134,29 +121,33 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from "vue";
+import { computed, onBeforeUnmount, ref } from "vue";
 import { image1, image2, camera, ai, like, dislike, copy } from "./assets";
 import Tag from "./components/Tag.vue";
-import { detectImages } from "./apis/googleVisionApi";
-import { detectTexts } from "./apis/textDetectionApi";
-import { generateCaption } from "./apis/captionGenerationApi";
+import { analyzeImage } from "./apis/imageAnalysisApi";
 import { copyToClipboard } from "./apis/copyToClipApi";
+import { appConfig } from "./config/env";
+import type { ImageDetectionResponse } from "./types/aiDetection";
 
 const isAvailable = ref<boolean>(false);
-const selectedPlatform = ref<string>("");
-const caption = ref<string>("");
+const isSubmitting = ref<boolean>(false);
+const resultText = ref<string>("");
+const statusText = computed(() => {
+  if (isSubmitting.value) {
+    return "Running AI-origin detection with Hugging Face...";
+  }
+
+  return "Upload one or two images, then run AI-origin detection.";
+});
 
 // References to the file input elements
 const imageUpload1 = ref<HTMLInputElement | null>(null);
 const imageUpload2 = ref<HTMLInputElement | null>(null);
 
-// Base64 URLs for the preview images
 const imageUrl1 = ref<string>(image2);
 const imageUrl2 = ref<string>(image1);
-
-// Base64 image strings for further processing
-const base64Image1 = ref<string>("");
-const base64Image2 = ref<string>("");
+const imageFile1 = ref<File | null>(null);
+const imageFile2 = ref<File | null>(null);
 
 // Function to trigger file input click
 const triggerFileInput = (inputRef: "imageUpload1" | "imageUpload2") => {
@@ -167,54 +158,112 @@ const triggerFileInput = (inputRef: "imageUpload1" | "imageUpload2") => {
   }
 };
 
-// Function to handle file selection and update the preview
 const handleFileChange = (
   inputRef: "imageUpload1" | "imageUpload2",
-  event: Event
+  event: Event,
 ) => {
   const input = event.target as HTMLInputElement;
   if (input.files && input.files[0]) {
     const file = input.files[0];
-    const reader = new FileReader();
 
-    reader.onload = (e: ProgressEvent<FileReader>) => {
-      if (inputRef === "imageUpload1") {
-        imageUrl1.value = e.target?.result as string;
-        base64Image1.value = (e.target?.result as string).split(",")[1];
-      } else {
-        imageUrl2.value = e.target?.result as string;
-        base64Image2.value = (e.target?.result as string).split(",")[1];
-      }
-    };
+    if (!file.type.startsWith("image/")) {
+      resultText.value = "Please select a valid image file.";
+      isAvailable.value = true;
+      return;
+    }
 
-    reader.readAsDataURL(file);
+    if (file.size > appConfig.maxUploadBytes) {
+      resultText.value = `File too large. Max supported size is ${Math.round(
+        appConfig.maxUploadBytes / (1024 * 1024),
+      )}MB.`;
+      isAvailable.value = true;
+      return;
+    }
+
+    const previewUrl = URL.createObjectURL(file);
+    if (inputRef === "imageUpload1") {
+      cleanupBlobUrl(imageUrl1.value);
+      imageUrl1.value = previewUrl;
+      imageFile1.value = file;
+    } else {
+      cleanupBlobUrl(imageUrl2.value);
+      imageUrl2.value = previewUrl;
+      imageFile2.value = file;
+    }
   }
 };
 
-// Function to handle form submission
+const cleanupBlobUrl = (url: string) => {
+  if (url.startsWith("blob:")) {
+    URL.revokeObjectURL(url);
+  }
+};
+
+type ImageSlot = "image1" | "image2";
+
+const formatPrediction = (
+  slot: ImageSlot,
+  prediction: ImageDetectionResponse,
+) => {
+  return [
+    `${slot}:`,
+    JSON.stringify(prediction, null, 2),
+    `classification: ${prediction.isAIGenerated ? "AI-generated" : "Human-created"}`,
+    "",
+  ].join("\n");
+};
+
 const handleSubmit = async (event: Event) => {
   event.preventDefault();
-  const Images = {
-    image1: base64Image1.value ? base64Image1.value : null,
-    image2: base64Image2.value ? base64Image2.value : null,
-  };
 
-  if (selectedPlatform.value === "OCR") {
-    const textResults = await detectTexts(Images);
-    caption.value = textResults ?? "No text detected";
+  if (!imageFile1.value && !imageFile2.value) {
+    resultText.value = "Upload at least one image before analyzing.";
     isAvailable.value = true;
-  } else {
-    const context = await detectImages(Images);
-    const textResults = await generateCaption(
-      // `Generate a ${selectedPlatform.value} post caption for my with this vision ai description: ${context || "Generic image"}`
-      `Generate a ${
-        selectedPlatform.value
-      } post caption for my with this vision ai description: ${
-        context || `An engaging post caption for ${selectedPlatform.value}`
-      }`
-    );
-    caption.value = textResults ?? "No caption generated";
+    return;
+  }
+
+  isSubmitting.value = true;
+
+  try {
+    const requests: Array<
+      Promise<{ slot: ImageSlot; result: ImageDetectionResponse }>
+    > = [];
+
+    if (imageFile1.value) {
+      requests.push(
+        analyzeImage(imageFile1.value).then((result) => ({
+          slot: "image1",
+          result,
+        })),
+      );
+    }
+
+    if (imageFile2.value) {
+      requests.push(
+        analyzeImage(imageFile2.value).then((result) => ({
+          slot: "image2",
+          result,
+        })),
+      );
+    }
+
+    const analyses = await Promise.all(requests);
+    resultText.value = analyses
+      .map((analysis) => formatPrediction(analysis.slot, analysis.result))
+      .join("\n");
     isAvailable.value = true;
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unexpected detection error.";
+    resultText.value = `Detection failed: ${message}`;
+    isAvailable.value = true;
+  } finally {
+    isSubmitting.value = false;
   }
 };
+
+onBeforeUnmount(() => {
+  cleanupBlobUrl(imageUrl1.value);
+  cleanupBlobUrl(imageUrl2.value);
+});
 </script>
