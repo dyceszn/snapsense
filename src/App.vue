@@ -41,8 +41,8 @@
           <div class="w-full md:h-[45%] md:overflow-scroll">
             <h1 class="pb-8 font-semibold">SnapSense</h1>
             <p class="hidden md:block">
-              Where creativity meets cutting-edge tech. Discover how your photos
-              come alive with AI-powered insights!<br /><br />
+              Where creativity meets cutting-edge tech. Discover whether your
+              photos are real or AI.<br /><br />
               &copy; 2024 dycelabs. All rights reserved.
             </p>
           </div>
@@ -104,7 +104,7 @@
     <div
       class="w-[75%] md:w-[85%] flex flex-col justify-center items-center text-center"
     >
-      <p class="overflow-y-scroll whitespace-pre-wrap text-left w-full">
+      <p class="w-full overflow-y-scroll text-left whitespace-pre-wrap">
         {{ resultText }}
       </p>
     </div>
