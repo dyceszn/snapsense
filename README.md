@@ -1,124 +1,129 @@
 # SnapSense
 
-SnapSense is focused on **AI image-origin detection** (AI-generated vs human-created) using a **free Hugging Face provider with model failover**.
+SnapSense is a Vue 3 + TypeScript web app that analyzes an uploaded image and predicts whether it is AI-generated or human-created. The current runtime path uses a Groq-hosted vision-capable model via a Vite server proxy, then returns a structured result with verdict, confidence, and model name.
 
-## What Changed
+## What This Project Solves
 
-- Removed mixed provider architecture (Google Vision + Hugging Face).
-- Introduced a clean AI detection stack with typed boundaries.
-- Replaced deprecated model selection with an actively maintained model registry.
-- Migrated inference traffic to the current Hugging Face router endpoint.
-- Added structured detection output:
+The app provides a lightweight frontend workflow for image-origin checks:
+
+- Upload one image through the main preview card.
+- Run AI-origin analysis with a single action.
+- View a clear result summary in the UI.
+
+This is useful for fast authenticity screening, demos, and product experiments where a full backend service is not required.
+
+## Tech Stack
+
+- Vue 3 with Composition API and TypeScript
+- Vite for development server and proxying
+- Tailwind CSS for styling and layout utilities
+- Lucide Vue for action icons
+- Fetch and Axios (Axios is present for provider variants)
+
+## Current Runtime Architecture
+
+The active analysis flow is:
+
+1. UI collects one image in `App.vue`.
+2. API adapter `apis/imageAnalysisApi.ts` forwards the file.
+3. Service `services/imageDetectionService.ts` calls the provider.
+4. Factory `services/aiServiceFactory.ts` currently instantiates `GroqImageDetectionProvider`.
+5. Provider sends a multimodal request to Groq through `/api/groq/...` (configured in Vite proxy).
+6. Provider parses model output into a typed result:
 
 ```json
 {
   "isAIGenerated": true,
-  "confidence": 0.9471,
-  "model": "dima806/ai_vs_human_generated_image_detection"
+  "confidence": 0.87,
+  "model": "meta-llama/llama-4-scout-17b-16e-instruct"
 }
 ```
 
-## Model Selection
+If structured JSON is not returned by the model, the provider applies a keyword heuristic fallback to still produce a result.
 
-Default primary/fallback models:
-
-- `dima806/ai_vs_human_generated_image_detection` (primary)
-- `dima806/deepfake_vs_real_image_detection` (fallback #1)
-- `capcheck/ai-human-generated-image-detection` (fallback #2)
-
-Why this model set:
-
-- All are public, non-gated, non-disabled `image-classification` models.
-- Metadata shows active maintenance in recent periods and endpoint compatibility tags.
-- Fallback ordering avoids single-model lock-in when any model becomes unavailable.
-
-You can replace the entire ordered model registry via environment variables with no code changes.
-
-## Architecture (Clean Layers)
-
-Updated structure:
+## Project Structure
 
 ```text
 src/
+	App.vue                         Main UI: upload, submit, result rendering
+	main.ts                         Vue app bootstrap
+	style.css                       Global styles and Tailwind directives
+
 	apis/
-		imageAnalysisApi.ts           # Thin endpoint adapter (no business logic)
-		copyToClipApi.ts
-	config/
-		env.ts                        # Centralized environment config
-		aiModelRegistry.ts            # Ordered model registry + rationale
+		imageAnalysisApi.ts           Thin app-facing analysis adapter
+		copyToClipApi.ts              Clipboard helper for result text
+
+	services/
+		aiServiceFactory.ts           Wires and caches active AI provider
+		imageDetectionService.ts      Service layer over provider contract
+
 	providers/
 		ai/
-			imageDetectionProvider.ts   # Provider contract (AIProvider)
-			huggingFaceImageDetectionProvider.ts
-	services/
-		aiServiceFactory.ts           # Dependency wiring
-		imageDetectionService.ts      # App-level orchestration
+			imageDetectionProvider.ts   Shared provider interface
+			groqImageDetectionProvider.ts      Active provider
+			geminiImageDetectionProvider.ts    Alternative provider implementation
+			huggingFaceImageDetectionProvider.ts Legacy/alternative provider implementation
+
+	config/
+		env.ts                        Runtime config (for example max upload size)
+		aiModelRegistry.ts            Model registry utility used by provider variants
+
 	types/
-		aiDetection.ts                # Shared typed contracts + structured errors
-	App.vue
+		aiDetection.ts                Shared detection types/contracts
+
+	components/
+		Tag.vue                       Reusable image card tag component
+
+	assets/                         Icons and placeholder/preview images
 ```
 
-Design principles implemented:
+## UX and Behavior Notes
 
-- Separation of concerns.
-- Provider/application logic isolation.
-- Strong TypeScript typing.
-- Async error handling and centralized configuration.
-- Automatic model availability validation and fallback.
-- Easily extensible provider/model strategy.
+- Only one upload input is active (the large primary card).
+- The secondary card is decorative/non-interactive.
+- File validation checks image MIME type and file size before inference.
+- Result panel includes copy, like, and dislike interactions.
+- Blob URL cleanup is handled on component teardown to prevent browser memory leaks.
 
-## Environment Setup
+## Configuration
 
-Copy `.env.example` to `.env` and set:
+Use the existing `.env.example` as a baseline:
 
 ```bash
-VITE_HUGGING_FACE_API_KEY=hf_your_token_here
-VITE_HUGGING_FACE_IMAGE_DETECTION_MODELS=dima806/ai_vs_human_generated_image_detection,dima806/deepfake_vs_real_image_detection,capcheck/ai-human-generated-image-detection
+# Required for the current provider path
+GROQ_API_KEY=your_groq_api_key_here
+
+# Optional
 VITE_MAX_UPLOAD_BYTES=8388608
-VITE_MODEL_VALIDATION_TIMEOUT_MS=6000
-VITE_MODEL_INFERENCE_TIMEOUT_MS=30000
 ```
 
-## API Usage Example
+Notes:
 
-Internal endpoint adapter used by UI:
+- The Groq key is read by Vite proxy config (`vite.config.ts`) and attached server-side to proxied requests.
+- The key intentionally does not require a `VITE_` prefix for the default setup shown in `.env.example`.
 
-```ts
-import { analyzeImage } from "./apis/imageAnalysisApi";
-
-const file = input.files?.[0];
-if (file) {
-  const result = await analyzeImage(file);
-  console.log(result);
-}
-```
-
-Example response:
-
-```json
-{
-  "isAIGenerated": false,
-  "confidence": 0.8842,
-  "model": "dima806/deepfake_vs_real_image_detection"
-}
-```
-
-## Performance/UX Notes
-
-- Uses binary file upload to inference API (avoids base64 inflation).
-- Validates image type and size before request.
-- Validates model metadata before inference requests.
-- Uses automatic ordered failover across configured models.
-- Uses parallel analysis when two images are uploaded.
-- Returns clean, structured output for easy UI/analytics integration.
-
-## Run
+## Local Development
 
 ```bash
 npm install
 npm run dev
 ```
 
+Build for production:
+
+```bash
+npm run build
+npm run preview
+```
+
+## How Detection Output Is Displayed
+
+The UI formats the returned typed response into three lines:
+
+- Verdict (`AI-Generated` or `Human-Created`)
+- Confidence percentage
+- Model identifier used for inference
+
 ## License
 
-This project is licensed under the MIT License - see [LICENSE](LICENSE).
+This project is licensed under the MIT License. See `LICENSE`.

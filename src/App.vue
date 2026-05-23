@@ -10,28 +10,28 @@
       <div
         class="w-full h-[75%] flex flex-col-reverse justify-between md:flex-row md:h-[82.5%]"
       >
-        <!-- Row 1 Col 1: Input box -->
+        <!-- Row 1 Col 1: Primary upload card -->
 
         <div
           class="w-full h-[90%] overflow-x-hidden md:w-[68.5%] md:h-full relative rounded-3xl bg-[var(--tertiary)]"
         >
           <img
-            :src="imageUrl1"
+            :src="imageUrl"
             alt="Preview"
             class="object-cover w-full h-full cursor-pointer md:max-w-full"
-            @click="triggerFileInput('imageUpload1')"
+            @click="triggerFileInput"
           />
           <Tag :pic="ai" prop="Artificial Intelligence" />
           <input
             type="file"
-            ref="imageUpload1"
+            ref="imageUploadRef"
             accept="image/*"
             class="hidden"
-            @change="handleFileChange('imageUpload1', $event)"
+            @change="handleFileChange"
           />
         </div>
 
-        <!-- Row 1 Col 2: Header, Input box -->
+        <!-- Row 1 Col 2: Header + decorative card -->
 
         <div
           class="w-full h-[10%] flex flex-col justify-between md:w-[28.5%] md:h-full"
@@ -47,30 +47,22 @@
             </p>
           </div>
 
-          <!-- Col 2 Row 2 -->
+          <!-- Col 2 Row 2: Decorative card (non-functional) -->
 
           <div
             class="w-full h-[90%] hidden overflow-hidden md:h-[50%] md:block relative rounded-3xl bg-[var(--tertiary)]"
           >
             <img
-              :src="imageUrl2"
-              alt="Preview"
-              class="w-full h-auto max-w-full cursor-pointer"
-              @click="triggerFileInput('imageUpload2')"
+              :src="decorativeImage"
+              alt="Sample"
+              class="w-full h-auto max-w-full"
             />
             <Tag :pic="camera" prop="See the vision" />
-            <input
-              type="file"
-              ref="imageUpload2"
-              accept="image/*"
-              class="hidden"
-              @change="handleFileChange('imageUpload2', $event)"
-            />
           </div>
         </div>
       </div>
 
-      <!-- Row 2: Select and Button -->
+      <!-- Row 2: Status and Button -->
 
       <div
         class="w-full h-[20%] flex flex-col justify-between md:h-[12.5%] md:flex-row"
@@ -95,7 +87,7 @@
   </section>
   <hr class="w-[65%] border-[var(--primary)]" />
 
-  <!-- Section 2: Lower Container -->
+  <!-- Section 2: Result -->
 
   <section
     v-if="isAvailable"
@@ -108,89 +100,136 @@
         {{ resultText }}
       </p>
     </div>
-    <div
-      class="w-[10%] flex flex-col items-center md:items-end md:flex-row md:w-[12%] justify-between"
-    >
-      <button class="small-btn size-8" type="button">
-        <img :src="copy" alt="" @click="copyToClipboard(resultText)" />
-      </button>
-      <button class="small-btn size-8"><img :src="like" alt="" /></button>
-      <button class="small-btn size-8"><img :src="dislike" alt="" /></button>
+    <div class="w-[10%] flex lg:items-end lg:w-[12%]">
+      <div
+        class="flex flex-col flex-wrap items-center justify-center w-full gap-6 lg:flex-row"
+      >
+        <!-- Like Button -->
+        <button
+          class="flex items-center justify-center transition-colors small-btn size-8"
+          type="button"
+          @click="toggleLike"
+        >
+          <ThumbsUp
+            class="transition-colors size-6"
+            :class="
+              isLiked
+                ? 'text-blue-500 fill-blue-500'
+                : 'text-black hover:text-white'
+            "
+          />
+        </button>
+
+        <!-- Dislike Button -->
+        <button
+          class="flex items-center justify-center transition-colors small-btn size-8"
+          type="button"
+          @click="toggleDislike"
+        >
+          <ThumbsDown
+            class="transition-colors size-6"
+            :class="
+              isDisliked
+                ? 'text-red-500 fill-red-500'
+                : 'text-black hover:text-white'
+            "
+          />
+        </button>
+        <button
+          class="flex items-center justify-center transition-colors small-btn size-8"
+          type="button"
+          @click="copyToClipboardWithFeedback(resultText)"
+        >
+          <!-- Switches icon based on copy state -->
+          <Check v-if="isCopied" class="text-green-500 size-6" />
+          <Copy v-else class="text-black size-6 hover:text-white" />
+        </button>
+      </div>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref } from "vue";
-import { image1, image2, camera, ai, like, dislike, copy } from "./assets";
+import { image1, image2, camera, ai } from "./assets";
 import Tag from "./components/Tag.vue";
 import { analyzeImage } from "./apis/imageAnalysisApi";
 import { copyToClipboard } from "./apis/copyToClipApi";
 import { appConfig } from "./config/env";
 import type { ImageDetectionResponse } from "./types/aiDetection";
+import { Copy, Check, ThumbsUp, ThumbsDown } from "@lucide/vue";
 
 const isAvailable = ref<boolean>(false);
 const isSubmitting = ref<boolean>(false);
 const resultText = ref<string>("");
-const statusText = computed(() => {
-  if (isSubmitting.value) {
-    return "Running AI-origin detection with Hugging Face...";
-  }
+const isCopied = ref(false);
+const isLiked = ref(false);
+const isDisliked = ref(false);
 
-  return "Upload one or two images, then run AI-origin detection.";
-});
-
-// References to the file input elements
-const imageUpload1 = ref<HTMLInputElement | null>(null);
-const imageUpload2 = ref<HTMLInputElement | null>(null);
-
-const imageUrl1 = ref<string>(image2);
-const imageUrl2 = ref<string>(image1);
-const imageFile1 = ref<File | null>(null);
-const imageFile2 = ref<File | null>(null);
-
-// Function to trigger file input click
-const triggerFileInput = (inputRef: "imageUpload1" | "imageUpload2") => {
-  if (inputRef === "imageUpload1") {
-    imageUpload1.value?.click();
-  } else {
-    imageUpload2.value?.click();
+const copyToClipboardWithFeedback = async (text: string) => {
+  try {
+    await copyToClipboard(text);
+    isCopied.value = true;
+    setTimeout(() => (isCopied.value = false), 2000); // Reset after 2 seconds
+  } catch (error) {
+    console.error("Copy failed:", error);
   }
 };
 
-const handleFileChange = (
-  inputRef: "imageUpload1" | "imageUpload2",
-  event: Event,
-) => {
-  const input = event.target as HTMLInputElement;
-  if (input.files && input.files[0]) {
-    const file = input.files[0];
+const toggleLike = () => {
+  isLiked.value = !isLiked.value;
+  // Turning on 'like' turns off 'dislike'
+  if (isLiked.value) isDisliked.value = false;
+};
 
-    if (!file.type.startsWith("image/")) {
-      resultText.value = "Please select a valid image file.";
-      isAvailable.value = true;
-      return;
-    }
+const toggleDislike = () => {
+  isDisliked.value = !isDisliked.value;
+  // Turning on 'dislike' turns off 'like'
+  if (isDisliked.value) isLiked.value = false;
+};
 
-    if (file.size > appConfig.maxUploadBytes) {
-      resultText.value = `File too large. Max supported size is ${Math.round(
-        appConfig.maxUploadBytes / (1024 * 1024),
-      )}MB.`;
-      isAvailable.value = true;
-      return;
-    }
-
-    const previewUrl = URL.createObjectURL(file);
-    if (inputRef === "imageUpload1") {
-      cleanupBlobUrl(imageUrl1.value);
-      imageUrl1.value = previewUrl;
-      imageFile1.value = file;
-    } else {
-      cleanupBlobUrl(imageUrl2.value);
-      imageUrl2.value = previewUrl;
-      imageFile2.value = file;
-    }
+const statusText = computed(() => {
+  if (isSubmitting.value) {
+    return "Running AI-origin detection with Groq...";
   }
+  return "Upload an image, then run AI-origin detection.";
+});
+
+// Single active upload
+const imageUploadRef = ref<HTMLInputElement | null>(null);
+const imageUrl = ref<string>(image2);
+const imageFile = ref<File | null>(null);
+
+// Decorative second card uses a static placeholder image
+const decorativeImage = ref<string>(image1);
+
+const triggerFileInput = () => {
+  imageUploadRef.value?.click();
+};
+
+const handleFileChange = (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  if (!input.files || !input.files[0]) return;
+
+  const file = input.files[0];
+
+  if (!file.type.startsWith("image/")) {
+    resultText.value = "Please select a valid image file.";
+    isAvailable.value = true;
+    return;
+  }
+
+  if (file.size > appConfig.maxUploadBytes) {
+    resultText.value = `File too large. Max supported size is ${Math.round(
+      appConfig.maxUploadBytes / (1024 * 1024),
+    )}MB.`;
+    isAvailable.value = true;
+    return;
+  }
+
+  cleanupBlobUrl(imageUrl.value);
+  imageUrl.value = URL.createObjectURL(file);
+  imageFile.value = file;
 };
 
 const cleanupBlobUrl = (url: string) => {
@@ -199,25 +238,21 @@ const cleanupBlobUrl = (url: string) => {
   }
 };
 
-type ImageSlot = "image1" | "image2";
-
-const formatPrediction = (
-  slot: ImageSlot,
-  prediction: ImageDetectionResponse,
-) => {
+const formatResult = (prediction: ImageDetectionResponse): string => {
+  const verdict = prediction.isAIGenerated ? "AI-Generated" : "Human-Created";
+  const pct = (prediction.confidence * 100).toFixed(1);
   return [
-    `${slot}:`,
-    JSON.stringify(prediction, null, 2),
-    `classification: ${prediction.isAIGenerated ? "AI-generated" : "Human-created"}`,
-    "",
+    `Verdict: ${verdict}`,
+    `Confidence: ${pct}%`,
+    `Model: ${prediction.model}`,
   ].join("\n");
 };
 
 const handleSubmit = async (event: Event) => {
   event.preventDefault();
 
-  if (!imageFile1.value && !imageFile2.value) {
-    resultText.value = "Upload at least one image before analyzing.";
+  if (!imageFile.value) {
+    resultText.value = "Upload an image before analyzing.";
     isAvailable.value = true;
     return;
   }
@@ -225,32 +260,8 @@ const handleSubmit = async (event: Event) => {
   isSubmitting.value = true;
 
   try {
-    const requests: Array<
-      Promise<{ slot: ImageSlot; result: ImageDetectionResponse }>
-    > = [];
-
-    if (imageFile1.value) {
-      requests.push(
-        analyzeImage(imageFile1.value).then((result) => ({
-          slot: "image1",
-          result,
-        })),
-      );
-    }
-
-    if (imageFile2.value) {
-      requests.push(
-        analyzeImage(imageFile2.value).then((result) => ({
-          slot: "image2",
-          result,
-        })),
-      );
-    }
-
-    const analyses = await Promise.all(requests);
-    resultText.value = analyses
-      .map((analysis) => formatPrediction(analysis.slot, analysis.result))
-      .join("\n");
+    const result = await analyzeImage(imageFile.value);
+    resultText.value = formatResult(result);
     isAvailable.value = true;
   } catch (error) {
     const message =
@@ -263,7 +274,6 @@ const handleSubmit = async (event: Event) => {
 };
 
 onBeforeUnmount(() => {
-  cleanupBlobUrl(imageUrl1.value);
-  cleanupBlobUrl(imageUrl2.value);
+  cleanupBlobUrl(imageUrl.value);
 });
 </script>

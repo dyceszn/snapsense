@@ -1,5 +1,4 @@
-import { appConfig } from "../config/env";
-import { HuggingFaceImageDetectionProvider } from "../providers/ai/huggingFaceImageDetectionProvider";
+import { GroqImageDetectionProvider } from "../providers/ai/groqImageDetectionProvider";
 import { ImageDetectionService } from "./imageDetectionService";
 
 let detectionService: ImageDetectionService | null = null;
@@ -9,14 +8,7 @@ export const getImageDetectionService = (): ImageDetectionService => {
     return detectionService;
   }
 
-  const provider = new HuggingFaceImageDetectionProvider(
-    appConfig.imageDetectionModels,
-    {
-      validationTimeoutMs: appConfig.modelValidationTimeoutMs,
-      inferenceTimeoutMs: appConfig.modelInferenceTimeoutMs,
-    },
-  );
-
+  const provider = new GroqImageDetectionProvider();
   detectionService = new ImageDetectionService(provider);
   return detectionService;
 };
